@@ -9,6 +9,10 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Added
+- GlobalResource interface in core/v3 allows core/v3 resources to
+be marked as global resources.
+
 ## [6.7.0] - 2022-04-21
 
 ### Added
