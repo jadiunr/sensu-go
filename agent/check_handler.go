@@ -371,6 +371,7 @@ func evaluateOutputMetricThresholds(event *corev2.Event) uint32 {
 	thresholds := event.Check.OutputMetricThresholds
 
 	var status uint32 = 0
+	var isExceeded bool = false
 	annotationValue := ""
 	for _, thresholdRule := range thresholds {
 		ruleMatched := false
@@ -384,11 +385,16 @@ func evaluateOutputMetricThresholds(event *corev2.Event) uint32 {
 							continue
 						}
 						if metricPoint.Value < min {
-							addThresholdAnnotation(event, thresholdRule, measureMin, rule.Status, metricPoint.Value, rule.Min)
+							isExceeded = true
+							addThresholdAnnotation(event, thresholdRule, measureMin, rule.Status, metricPoint.Value, rule.Min, isExceeded)
 							if status < rule.Status {
 								status = rule.Status
-								annotationValue = getAnnotationValue(thresholdRule, measureMin, metricPoint.Value, rule.Min)
+								annotationValue = getAnnotationValue(thresholdRule, measureMin, metricPoint.Value, rule.Min, isExceeded)
 							}
+							continue
+						} else {
+							addThresholdAnnotation(event, thresholdRule, measureMin, 0, metricPoint.Value, rule.Min, isExceeded)
+							annotationValue = getAnnotationValue(thresholdRule, measureMin, metricPoint.Value, rule.Min, isExceeded)
 							continue
 						}
 					}
@@ -398,11 +404,15 @@ func evaluateOutputMetricThresholds(event *corev2.Event) uint32 {
 							continue
 						}
 						if metricPoint.Value > max {
-							addThresholdAnnotation(event, thresholdRule, measureMax, rule.Status, metricPoint.Value, rule.Max)
+							isExceeded = true
+							addThresholdAnnotation(event, thresholdRule, measureMax, rule.Status, metricPoint.Value, rule.Max, isExceeded)
 							if status < rule.Status {
 								status = rule.Status
-								annotationValue = getAnnotationValue(thresholdRule, measureMax, metricPoint.Value, rule.Max)
+								annotationValue = getAnnotationValue(thresholdRule, measureMax, metricPoint.Value, rule.Max, isExceeded)
 							}
+						} else {
+							addThresholdAnnotation(event, thresholdRule, measureMax, 0, metricPoint.Value, rule.Max, isExceeded)
+							annotationValue = getAnnotationValue(thresholdRule, measureMax, metricPoint.Value, rule.Max, isExceeded)
 						}
 					}
 				}
@@ -426,8 +436,8 @@ func evaluateOutputMetricThresholds(event *corev2.Event) uint32 {
 	return status
 }
 
-func addThresholdAnnotation(event *corev2.Event, metricThreshold *corev2.MetricThreshold, measure string, status uint32, value float64, threshold string) {
-	event.AddAnnotation(getAnnotationKey(metricThreshold, measure, status), getAnnotationValue(metricThreshold, measure, value, threshold))
+func addThresholdAnnotation(event *corev2.Event, metricThreshold *corev2.MetricThreshold, measure string, status uint32, value float64, threshold string, isExceeded bool) {
+	event.AddAnnotation(getAnnotationKey(metricThreshold, measure, status), getAnnotationValue(metricThreshold, measure, value, threshold, isExceeded))
 }
 
 func addNullStatusThresholdAnnotation(event *corev2.Event, metricThreshold *corev2.MetricThreshold, status uint32) {
@@ -451,7 +461,7 @@ func getAnnotationKey(metricThreshold *corev2.MetricThreshold, measure string, s
 	return key.String()
 }
 
-func getAnnotationValue(metricThreshold *corev2.MetricThreshold, measure string, value float64, threshold string) string {
+func getAnnotationValue(metricThreshold *corev2.MetricThreshold, measure string, value float64, threshold string, isExceeded bool) string {
 	var val strings.Builder
 	var tagsKeyVal strings.Builder
 
@@ -471,7 +481,11 @@ func getAnnotationValue(metricThreshold *corev2.MetricThreshold, measure string,
 		val.WriteString(tagsKeyVal.String())
 		val.WriteString(")")
 	}
-	val.WriteString(" exceeded the configured threshold (")
+	if isExceeded {
+		val.WriteString(" exceeded the configured threshold (")
+	} else {
+		val.WriteString(" is within the configured threshold (")
+	}
 	val.WriteString(measure)
 	val.WriteString(": ")
 	val.WriteString(threshold)
